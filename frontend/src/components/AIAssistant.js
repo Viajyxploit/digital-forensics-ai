@@ -41,7 +41,8 @@ const AIAssistant = ({ onClose }) => {
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed right-8 top-8 bottom-24 w-96 glass-panel flex flex-col z-50"
+        className="fixed right-8 top-8 bottom-24 w-96 glass-panel flex flex-col"
+        style={{ zIndex: 99998 }}
         initial={{ x: 400, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         exit={{ x: 400, opacity: 0 }}

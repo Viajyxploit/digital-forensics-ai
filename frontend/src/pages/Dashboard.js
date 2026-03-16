@@ -91,8 +91,8 @@ const Dashboard = () => {
 
       <motion.button
         onClick={() => setShowAI(!showAI)}
-        className="fixed bottom-8 right-8 px-6 py-3 bg-electric-violet text-white font-bold clip-path-button hover:bg-cyan-core transition-colors duration-300 z-40"
-        style={{ fontFamily: 'Rajdhani, sans-serif' }}
+        className="fixed bottom-8 right-8 px-6 py-3 bg-electric-violet text-white font-bold clip-path-button hover:bg-cyan-core transition-colors duration-300"
+        style={{ fontFamily: 'Rajdhani, sans-serif', zIndex: 99999 }}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         data-testid="ai-assistant-toggle-btn"
