@@ -4,6 +4,7 @@ import { Upload, FileText, Download, Search, Hash, AlertTriangle, CheckCircle, A
 import axios from 'axios';
 import { toast } from 'sonner';
 import HexViewer from '../components/HexViewer';
+import PlatformFooter from '../components/PlatformFooter';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -243,5 +244,7 @@ const ForensicsLab = () => {
     </div>
   );
 };
+      
+      <PlatformFooter />
 
 export default ForensicsLab;

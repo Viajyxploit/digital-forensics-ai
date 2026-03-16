@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import DashboardHome from '../components/DashboardHome';
 import AIAssistant from '../components/AIAssistant';
+import PlatformFooter from '../components/PlatformFooter';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -101,6 +102,8 @@ const Dashboard = () => {
       </motion.button>
 
       {showAI && <AIAssistant onClose={() => setShowAI(false)} />}
+
+      <PlatformFooter />
     </div>
   );
 };

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { BookOpen, Clock, TrendingUp, Shield, Activity, Bug, AlertTriangle, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import PlatformFooter from '../components/PlatformFooter';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -125,6 +126,8 @@ const LearningHub = () => {
           );
         })}
       </div>
+      
+      <PlatformFooter />
     </div>
   );
 };

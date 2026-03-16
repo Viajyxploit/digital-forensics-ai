@@ -175,9 +175,20 @@ const LandingPage = () => {
       </section>
 
       <footer className="relative z-10 glass-panel px-12 py-8 mt-24 text-center" data-testid="footer">
-        <p className="text-gray-500" style={{ fontFamily: 'Outfit, sans-serif' }}>
+        <p className="text-gray-500 mb-4" style={{ fontFamily: 'Outfit, sans-serif' }}>
           © 2026 CyberSentinels. All Rights Reserved. | Advanced Digital Forensics Platform
         </p>
+        <div className="flex items-center justify-center gap-8 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400">Owner:</span>
+            <span className="text-cyan-core font-semibold" style={{ fontFamily: 'Rajdhani, sans-serif' }}>Vijay</span>
+          </div>
+          <div className="w-px h-4 bg-white/20" />
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400">Author:</span>
+            <span className="text-electric-violet font-semibold" style={{ fontFamily: 'Rajdhani, sans-serif' }}>Vijay</span>
+          </div>
+        </div>
       </footer>
     </div>
   );

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { User, Mail, Award, TrendingUp, Shield } from 'lucide-react';
 import axios from 'axios';
+import PlatformFooter from '../components/PlatformFooter';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -134,6 +135,8 @@ const Profile = () => {
             </div>
           </motion.div>
         </div>
+      
+      <PlatformFooter />
       </div>
     </div>
   );
