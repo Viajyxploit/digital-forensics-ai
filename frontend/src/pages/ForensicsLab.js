@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, FileText, Download, Search, Hash, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Upload, FileText, Download, Search, Hash, AlertTriangle, CheckCircle, Activity, Shield } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
+import HexViewer from '../components/HexViewer';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -29,7 +30,7 @@ const ForensicsLab = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post(`${API}/forensics/upload`, formData, {
+      const response = await axios.post(`${API}/forensics/upload-advanced`, formData, {
         headers: { 
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -148,16 +149,43 @@ const ForensicsLab = () => {
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="glass-panel p-4">
                     <p className="text-sm text-gray-400 mb-1" style={{ fontFamily: 'Outfit, sans-serif' }}>File Size</p>
                     <p className="text-xl font-bold" style={{ fontFamily: 'JetBrains Mono, monospace' }}>{(analysis.file_size / 1024).toFixed(2)} KB</p>
                   </div>
                   <div className="glass-panel p-4">
                     <p className="text-sm text-gray-400 mb-1" style={{ fontFamily: 'Outfit, sans-serif' }}>Threat Level</p>
-                    <p className={`text-xl font-bold ${analysis.threat_level === 'low' ? 'text-acid-lime' : 'text-neon-red'}`} style={{ fontFamily: 'Rajdhani, sans-serif' }}>
-                      {analysis.threat_level.toUpperCase()}
+                    <p className={`text-xl font-bold ${
+                      analysis.threat_analysis?.threat_level === 'low' ? 'text-acid-lime' : 
+                      analysis.threat_analysis?.threat_level === 'medium' ? 'text-solar-orange' : 
+                      'text-neon-red'
+                    }`} style={{ fontFamily: 'Rajdhani, sans-serif' }}>
+                      {analysis.threat_analysis?.threat_level?.toUpperCase()}
                     </p>
+                  </div>
+                  <div className="glass-panel p-4">
+                    <p className="text-sm text-gray-400 mb-1" style={{ fontFamily: 'Outfit, sans-serif' }}>Entropy</p>
+                    <p className="text-xl font-bold text-electric-violet" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                      {analysis.entropy}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="glass-panel p-6">
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2" style={{ fontFamily: 'Rajdhani, sans-serif' }}>
+                    <Activity className="w-5 h-5 text-bright-blue" />
+                    FILE TYPE
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">MIME Type:</span>
+                      <span className="text-cyan-core font-mono">{analysis.file_type?.mime_type}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Description:</span>
+                      <span className="text-white">{analysis.file_type?.description}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -167,24 +195,26 @@ const ForensicsLab = () => {
                     HASH VALUES
                   </h3>
                   <div className="space-y-2">
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1" style={{ fontFamily: 'Outfit, sans-serif' }}>MD5</p>
-                      <p className="font-mono text-sm text-cyan-core break-all">{analysis.hash_md5}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-1" style={{ fontFamily: 'Outfit, sans-serif' }}>SHA-256</p>
-                      <p className="font-mono text-sm text-cyan-core break-all">{analysis.hash_sha256}</p>
-                    </div>
+                    {Object.entries(analysis.hashes || {}).map(([algorithm, hash]) => (
+                      <div key={algorithm}>
+                        <p className="text-xs text-gray-400 mb-1" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                          {algorithm.toUpperCase()}
+                        </p>
+                        <p className="font-mono text-sm text-cyan-core break-all">{hash}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
+                <HexViewer hexData={analysis.hex_preview || []} />
+
                 <div className="glass-panel p-6">
                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2" style={{ fontFamily: 'Rajdhani, sans-serif' }}>
-                    <CheckCircle className="w-5 h-5 text-acid-lime" />
-                    FINDINGS
+                    <Shield className="w-5 h-5 text-acid-lime" />
+                    THREAT ANALYSIS
                   </h3>
                   <div className="space-y-2">
-                    {analysis.findings.map((finding, idx) => (
+                    {(analysis.threat_analysis?.findings || []).map((finding, idx) => (
                       <div key={idx} className="flex items-start gap-2" data-testid={`finding-${idx}`}>
                         <CheckCircle className="w-4 h-4 text-acid-lime mt-1 flex-shrink-0" />
                         <p className="text-sm" style={{ fontFamily: 'Outfit, sans-serif' }}>{finding}</p>
@@ -192,6 +222,19 @@ const ForensicsLab = () => {
                     ))}
                   </div>
                 </div>
+
+                {analysis.strings && analysis.strings.length > 0 && (
+                  <div className="glass-panel p-6">
+                    <h3 className="text-lg font-bold mb-4" style={{ fontFamily: 'Rajdhani, sans-serif' }}>
+                      EXTRACTED STRINGS
+                    </h3>
+                    <div className="bg-black/60 p-4 rounded max-h-64 overflow-y-auto">
+                      {analysis.strings.map((str, idx) => (
+                        <p key={idx} className="font-mono text-xs text-gray-300 mb-1">{str}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </motion.div>

@@ -15,6 +15,11 @@ import jwt
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import json
 import base64
+from fastapi.responses import Response
+from services.forensics_service import forensics_service
+from services.certificate_service import certificate_service
+from services.threat_detection_service import threat_detection_service
+from services.oauth_service import oauth_service
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -108,6 +113,29 @@ class ChatResponse(BaseModel):
 
 class ProgressUpdate(BaseModel):
     module_id: str
+
+class GoogleOAuthRequest(BaseModel):
+    token: str
+
+class QuizQuestion(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    module_id: str
+    question: str
+    options: List[str]
+    correct_answer: int
+    explanation: str
+
+class QuizSubmission(BaseModel):
+    quiz_id: str
+    answers: List[int]
+
+class QuizResult(BaseModel):
+    quiz_id: str
+    score: int
+    total_questions: int
+    passed: bool
+    answers: List[Dict[str, Any]]
     completed: bool
 
 def create_token(user_id: str, email: str) -> str:
@@ -280,6 +308,221 @@ async def upload_file(file: UploadFile = File(...), payload: dict = Depends(veri
     }
     
     await db.forensic_files.insert_one(file_doc)
+
+@api_router.post("/auth/google")
+async def google_oauth_login(oauth_request: GoogleOAuthRequest):
+    user_info = oauth_service.verify_google_token(oauth_request.token)
+    if not user_info:
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+    
+    user = await db.users.find_one({"email": user_info['email']}, {"_id": 0})
+    
+    if not user:
+        user_id = str(uuid.uuid4())
+        user_doc = {
+            "id": user_id,
+            "email": user_info['email'],
+            "name": user_info['name'],
+            "picture": user_info.get('picture', ''),
+            "role": "student",
+            "auth_provider": "google",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.users.insert_one(user_doc)
+        token = create_token(user_id, user_info['email'])
+        return {
+            "token": token,
+            "user": {
+                "id": user_id,
+                "email": user_info['email'],
+                "name": user_info['name'],
+                "role": "student"
+            }
+        }
+    else:
+        token = create_token(user['id'], user['email'])
+        return {
+            "token": token,
+            "user": {
+                "id": user['id'],
+                "email": user['email'],
+                "name": user['name'],
+                "role": user['role']
+            }
+        }
+
+@api_router.post("/forensics/upload-advanced")
+async def upload_file_advanced(file: UploadFile = File(...), payload: dict = Depends(verify_token)):
+    file_id = str(uuid.uuid4())
+    content = await file.read()
+    
+    analysis = forensics_service.analyze_file(content, file.filename)
+    
+    file_doc = {
+        "id": file_id,
+        "user_id": payload['user_id'],
+        "filename": file.filename,
+        "file_size": len(content),
+        "file_type": analysis['file_type']['mime_type'],
+        "analysis": analysis,
+        "uploaded_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.forensic_files.insert_one(file_doc)
+    
+    return {
+        "id": file_id,
+        "filename": file.filename,
+        "analysis": analysis
+    }
+
+@api_router.get("/forensics/hex-view/{file_id}")
+async def get_hex_view(file_id: str, payload: dict = Depends(verify_token)):
+    file_doc = await db.forensic_files.find_one({"id": file_id, "user_id": payload['user_id']}, {"_id": 0})
+    if not file_doc:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    return {
+        "file_id": file_id,
+        "filename": file_doc['filename'],
+        "hex_data": file_doc['analysis'].get('hex_preview', [])
+    }
+
+@api_router.get("/modules/{module_id}/quiz")
+async def get_module_quiz(module_id: str, payload: dict = Depends(verify_token)):
+    quizzes = await db.quizzes.find({"module_id": module_id}, {"_id": 0}).to_list(20)
+    return quizzes
+
+@api_router.post("/quiz/submit")
+async def submit_quiz(submission: QuizSubmission, payload: dict = Depends(verify_token)):
+    quizzes = await db.quizzes.find({"id": submission.quiz_id}, {"_id": 0}).to_list(1)
+    if not quizzes:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    
+    quiz = quizzes[0]
+    questions = await db.quiz_questions.find({"quiz_id": submission.quiz_id}, {"_id": 0}).to_list(100)
+    
+    correct_count = 0
+    results = []
+    
+    for idx, question in enumerate(questions):
+        user_answer = submission.answers[idx] if idx < len(submission.answers) else -1
+        is_correct = user_answer == question['correct_answer']
+        if is_correct:
+            correct_count += 1
+        
+        results.append({
+            "question": question['question'],
+            "user_answer": user_answer,
+            "correct_answer": question['correct_answer'],
+            "is_correct": is_correct,
+            "explanation": question.get('explanation', '')
+        })
+    
+    score = int((correct_count / len(questions)) * 100) if questions else 0
+    passed = score >= 70
+    
+    quiz_result_doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": payload['user_id'],
+        "quiz_id": submission.quiz_id,
+        "score": score,
+        "total_questions": len(questions),
+        "correct_answers": correct_count,
+        "passed": passed,
+        "submitted_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.quiz_results.insert_one(quiz_result_doc)
+    
+    return {
+        "quiz_id": submission.quiz_id,
+        "score": score,
+        "total_questions": len(questions),
+        "passed": passed,
+        "answers": results
+    }
+
+@api_router.get("/certificate/{course_id}")
+async def get_certificate(course_id: str, payload: dict = Depends(verify_token)):
+    course = await db.courses.find_one({"id": course_id}, {"_id": 0})
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    
+    user = await db.users.find_one({"id": payload['user_id']}, {"_id": 0})
+    user_progress = await db.progress.find({
+        "user_id": payload['user_id'],
+        "course_id": course_id,
+        "completed": True
+    }, {"_id": 0}).to_list(1000)
+    
+    modules_completed = len(user_progress)
+    total_modules = course.get('modules_count', 0)
+    
+    if modules_completed < total_modules:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Course not completed. {modules_completed}/{total_modules} modules done."
+        )
+    
+    certificate_id = str(uuid.uuid4())
+    completion_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    
+    pdf_content = certificate_service.generate_certificate(
+        user_name=user['name'],
+        course_title=course['title'],
+        completion_date=completion_date,
+        certificate_id=certificate_id,
+        modules_completed=modules_completed
+    )
+    
+    cert_doc = {
+        "id": certificate_id,
+        "user_id": payload['user_id'],
+        "course_id": course_id,
+        "issued_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.certificates.insert_one(cert_doc)
+    
+    return Response(
+        content=pdf_content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=certificate_{course_id}.pdf"
+        }
+    )
+
+@api_router.get("/threats/advanced")
+async def get_advanced_threats(payload: dict = Depends(verify_token)):
+    report = threat_detection_service.generate_threat_report('24h')
+    return report
+
+@api_router.post("/threats/analyze-network")
+async def analyze_network_traffic(traffic_data: Dict[str, Any], payload: dict = Depends(verify_token)):
+    analysis = threat_detection_service.analyze_network_traffic(traffic_data)
+    
+    if analysis['overall_severity'] in ['high', 'critical']:
+        threat_doc = {
+            "id": str(uuid.uuid4()),
+            "title": "Network Threat Detected",
+            "severity": analysis['overall_severity'],
+            "description": f"Detected {analysis['threats_detected']} threats in network traffic",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "status": "active",
+            "details": analysis
+        }
+        await db.threats.insert_one(threat_doc)
+    
+    return analysis
+
+@api_router.post("/threats/analyze-file-behavior")
+async def analyze_file_behavior(
+    file_hash: str,
+    behavior_data: Dict[str, Any],
+    payload: dict = Depends(verify_token)
+):
+    analysis = threat_detection_service.analyze_file_behavior(file_hash, behavior_data)
+    return analysis
+
     
     return {
         "id": file_id,
@@ -449,3 +692,52 @@ async def init_db():
             }
         ]
         await db.threats.insert_many(sample_threats)
+        
+        # Add sample quizzes
+        quizzes_exist = await db.quiz_questions.count_documents({})
+        if quizzes_exist == 0:
+            sample_quiz_questions = [
+                {
+                    "id": str(uuid.uuid4()),
+                    "module_id": "mod-1",
+                    "quiz_id": "quiz-1",
+                    "question": "What is the primary goal of digital forensics?",
+                    "options": [
+                        "To hack into systems",
+                        "To uncover and interpret electronic data for legal purposes",
+                        "To create malware",
+                        "To encrypt data"
+                    ],
+                    "correct_answer": 1,
+                    "explanation": "Digital forensics focuses on uncovering and interpreting electronic data for legal and investigative purposes."
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "module_id": "mod-1",
+                    "quiz_id": "quiz-1",
+                    "question": "Which of the following is essential in digital forensics?",
+                    "options": [
+                        "Deleting evidence",
+                        "Chain of custody",
+                        "Hiding data",
+                        "Formatting drives"
+                    ],
+                    "correct_answer": 1,
+                    "explanation": "Chain of custody is critical to maintain the integrity and admissibility of digital evidence."
+                },
+                {
+                    "id": str(uuid.uuid4()),
+                    "module_id": "mod-2",
+                    "quiz_id": "quiz-2",
+                    "question": "What should be done first when collecting digital evidence?",
+                    "options": [
+                        "Turn off the computer",
+                        "Document the scene and create a forensic image",
+                        "Delete temporary files",
+                        "Install new software"
+                    ],
+                    "correct_answer": 1,
+                    "explanation": "Documentation and creating forensic images preserves evidence without alteration."
+                }
+            ]
+            await db.quiz_questions.insert_many(sample_quiz_questions)

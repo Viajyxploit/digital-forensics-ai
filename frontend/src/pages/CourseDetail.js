@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, Circle, Play, Clock } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Circle, Play, Clock, Download, Award } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
+import Quiz from '../components/Quiz';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -13,6 +14,8 @@ const CourseDetail = () => {
   const navigate = useNavigate();
   const [modules, setModules] = useState([]);
   const [selectedModule, setSelectedModule] = useState(null);
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [courseCompleted, setCourseCompleted] = useState(false);
 
   useEffect(() => {
     fetchModules();
@@ -33,6 +36,40 @@ const CourseDetail = () => {
     }
   };
 
+
+  const downloadCertificate = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API}/certificate/${courseId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `certificate_${courseId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      toast.success('Certificate downloaded!');
+    } catch (error) {
+      console.error('Failed to download certificate', error);
+      toast.error(error.response?.data?.detail || 'Failed to download certificate');
+    }
+  };
+
+  const checkCourseCompletion = () => {
+    const completed = modules.every(m => m.completed);
+    setCourseCompleted(completed);
+  };
+
+  useEffect(() => {
+    if (modules.length > 0) {
+      checkCourseCompletion();
+    }
+  }, [modules]);
   const markComplete = async () => {
     if (!selectedModule) return;
 
@@ -122,21 +159,74 @@ const CourseDetail = () => {
                 </p>
               </div>
 
-              <motion.button
-                onClick={markComplete}
-                className={`px-8 py-3 ${
-                  selectedModule.completed
-                    ? 'bg-acid-lime/20 border border-acid-lime/30 text-acid-lime'
-                    : 'bg-cyan-core text-black hover:bg-white'
-                } font-bold clip-path-button transition-colors duration-300`}
-                style={{ fontFamily: 'Rajdhani, sans-serif' }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.98 }}
-                disabled={selectedModule.completed}
-                data-testid="mark-complete-btn"
-              >
-                {selectedModule.completed ? 'COMPLETED' : 'MARK AS COMPLETE'}
-              </motion.button>
+              <div className="flex gap-4">
+                <motion.button
+                  onClick={markComplete}
+                  className={`px-8 py-3 ${
+                    selectedModule.completed
+                      ? 'bg-acid-lime/20 border border-acid-lime/30 text-acid-lime'
+                      : 'bg-cyan-core text-black hover:bg-white'
+                  } font-bold clip-path-button transition-colors duration-300`}
+                  style={{ fontFamily: 'Rajdhani, sans-serif' }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.98 }}
+                  disabled={selectedModule.completed}
+                  data-testid="mark-complete-btn"
+                >
+                  {selectedModule.completed ? 'COMPLETED' : 'MARK AS COMPLETE'}
+                </motion.button>
+
+                {selectedModule.completed && (
+                  <motion.button
+                    onClick={() => setShowQuiz(!showQuiz)}
+                    className="px-8 py-3 bg-laser-yellow text-black font-bold hover:bg-white transition-colors duration-300"
+                    style={{ fontFamily: 'Rajdhani, sans-serif' }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.98 }}
+                    data-testid="take-quiz-btn"
+                  >
+                    {showQuiz ? 'HIDE QUIZ' : 'TAKE QUIZ'}
+                  </motion.button>
+                )}
+              </div>
+
+              {showQuiz && selectedModule.completed && (
+                <div className="mt-8">
+                  <Quiz moduleId={selectedModule.id} onComplete={() => {
+                    fetchModules();
+                    toast.success('Great job! Continue learning!');
+                  }} />
+                </div>
+              )}
+
+              {courseCompleted && (
+                <motion.div
+                  className="mt-8 glass-panel p-6 border-l-4 border-laser-yellow"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Award className="w-8 h-8 text-laser-yellow" />
+                      <div>
+                        <h3 className="text-xl font-bold" style={{ fontFamily: 'Rajdhani, sans-serif' }}>COURSE COMPLETED!</h3>
+                        <p className="text-gray-400" style={{ fontFamily: 'Outfit, sans-serif' }}>Download your certificate</p>
+                      </div>
+                    </div>
+                    <motion.button
+                      onClick={downloadCertificate}
+                      className="flex items-center gap-2 px-6 py-3 bg-laser-yellow text-black font-bold hover:bg-white transition-colors"
+                      style={{ fontFamily: 'Rajdhani, sans-serif' }}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.98 }}
+                      data-testid="download-certificate-btn"
+                    >
+                      <Download className="w-5 h-5" />
+                      DOWNLOAD CERTIFICATE
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
             </motion.div>
           ) : (
             <div className="glass-panel p-8 flex items-center justify-center h-full">
