@@ -31,13 +31,22 @@ const LandingPage = () => {
   };
 
   const features = [
-    { icon: Brain, color: 'electric-violet', title: 'AI-Powered Analysis', desc: 'Advanced machine learning for threat detection' },
-    { icon: Shield, color: 'cyan-core', title: 'Digital Forensics', desc: 'Professional-grade investigation tools' },
-    { icon: Terminal, color: 'acid-lime', title: 'Live Analysis', desc: 'Real-time file and data examination' },
-    { icon: Database, color: 'bright-blue', title: 'Evidence Collection', desc: 'Secure chain of custody management' },
-    { icon: Zap, color: 'laser-yellow', title: 'Threat Monitor', desc: 'Continuous security surveillance' },
-    { icon: Lock, color: 'neon-red', title: 'Learning Platform', desc: 'Expert-led cybersecurity courses' }
+    { icon: Brain, color: 'electric-violet', title: 'AI-Powered Analysis', desc: 'Advanced machine learning for threat detection', route: '/dashboard' },
+    { icon: Shield, color: 'cyan-core', title: 'Digital Forensics', desc: 'Professional-grade investigation tools', route: '/forensics' },
+    { icon: Terminal, color: 'acid-lime', title: 'Live Analysis', desc: 'Real-time file and data examination', route: '/forensics' },
+    { icon: Database, color: 'bright-blue', title: 'Evidence Collection', desc: 'Secure chain of custody management', route: '/forensics' },
+    { icon: Zap, color: 'laser-yellow', title: 'Threat Monitor', desc: 'Continuous security surveillance', route: '/threats' },
+    { icon: Lock, color: 'neon-red', title: 'Learning Platform', desc: 'Expert-led cybersecurity courses', route: '/learning' }
   ];
+
+  const handleFeatureClick = (route) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      navigate(route);
+    } else {
+      navigate('/auth');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-deep-obsidian text-white relative overflow-hidden">
@@ -116,17 +125,22 @@ const LandingPage = () => {
             return (
               <motion.div
                 key={idx}
-                className="glass-panel p-8 group hover:border-cyan-core/50 transition-all duration-500"
+                onClick={() => handleFeatureClick(feature.route)}
+                className="glass-panel p-8 group hover:border-cyan-core/50 transition-all duration-500 cursor-pointer"
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: idx * 0.1 }}
-                whileHover={{ y: -5 }}
+                whileHover={{ y: -5, scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 data-testid={`feature-card-${idx}`}
               >
                 <Icon className={`w-12 h-12 text-${feature.color} mb-4 group-hover:animate-pulse-glow`} />
                 <h3 className="text-2xl font-semibold mb-3" style={{ fontFamily: 'Rajdhani, sans-serif' }}>{feature.title}</h3>
                 <p className="text-gray-400" style={{ fontFamily: 'Outfit, sans-serif' }}>{feature.desc}</p>
+                <div className="mt-4 text-cyan-core text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                  Click to explore →
+                </div>
               </motion.div>
             );
           })}
