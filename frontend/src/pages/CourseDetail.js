@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, Circle, Play, Clock, Download, Award } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Circle, Play, Clock, Download, Award, Beaker } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import Quiz from '../components/Quiz';
+import LabEnvironment from '../components/labs/LabEnvironment';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -15,6 +16,7 @@ const CourseDetail = () => {
   const [modules, setModules] = useState([]);
   const [selectedModule, setSelectedModule] = useState(null);
   const [showQuiz, setShowQuiz] = useState(false);
+  const [showLabs, setShowLabs] = useState(false);
   const [courseCompleted, setCourseCompleted] = useState(false);
 
   useEffect(() => {
@@ -102,6 +104,23 @@ const CourseDetail = () => {
         BACK TO LEARNING HUB
       </motion.button>
 
+      <div className="mb-8 flex justify-end">
+        <motion.button
+          onClick={() => setShowLabs(!showLabs)}
+          className="flex items-center gap-2 px-6 py-3 bg-electric-violet text-white font-bold hover:bg-cyan-core transition-colors"
+          style={{ fontFamily: 'Rajdhani, sans-serif' }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          data-testid="open-labs-btn"
+        >
+          <Beaker className="w-5 h-5" />
+          {showLabs ? 'CLOSE LABS' : 'OPEN INTERACTIVE LABS'}
+        </motion.button>
+      </div>
+
+      {showLabs ? (
+        <LabEnvironment courseId={courseId} onClose={() => setShowLabs(false)} />
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 space-y-4">
           <h2 className="text-2xl font-bold mb-4" style={{ fontFamily: 'Rajdhani, sans-serif' }}>MODULES</h2>
@@ -235,6 +254,7 @@ const CourseDetail = () => {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 };

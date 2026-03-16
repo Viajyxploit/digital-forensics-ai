@@ -19,6 +19,7 @@ from fastapi.responses import Response
 from services.forensics_service import forensics_service
 from services.certificate_service import certificate_service
 from services.threat_detection_service import threat_detection_service
+from services.lab_service import lab_service
 from services.oauth_service import oauth_service
 
 ROOT_DIR = Path(__file__).parent
@@ -136,6 +137,20 @@ class QuizResult(BaseModel):
     total_questions: int
     passed: bool
     answers: List[Dict[str, Any]]
+
+class LabTaskSubmission(BaseModel):
+    lab_id: str
+    task_id: int
+    answer: Any
+
+class LabProgress(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    user_id: str
+    lab_id: str
+    completed_tasks: List[int]
+    score: int
+    started_at: str
+    completed_at: Optional[str] = None
     completed: bool
 
 def create_token(user_id: str, email: str) -> str:
@@ -513,6 +528,91 @@ async def analyze_network_traffic(traffic_data: Dict[str, Any], payload: dict = 
         await db.threats.insert_one(threat_doc)
     
     return analysis
+
+@api_router.get("/courses/{course_id}/labs")
+async def get_course_labs(course_id: str, payload: dict = Depends(verify_token)):
+    labs = lab_service.get_course_labs(course_id)
+    return labs
+
+@api_router.get("/labs/{lab_type}/{lab_id}")
+async def get_lab_scenario(lab_type: str, lab_id: str, payload: dict = Depends(verify_token)):
+    scenario = lab_service.get_lab_scenario(lab_type, lab_id)
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Lab scenario not found")
+    return scenario
+
+@api_router.post("/labs/start")
+async def start_lab(lab_id: str, payload: dict = Depends(verify_token)):
+    progress_doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": payload['user_id'],
+        "lab_id": lab_id,
+        "completed_tasks": [],
+        "score": 0,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "completed_at": None
+    }
+    await db.lab_progress.insert_one(progress_doc)
+    return {"message": "Lab started", "progress_id": progress_doc["id"]}
+
+@api_router.post("/labs/submit-task")
+async def submit_lab_task(submission: LabTaskSubmission, payload: dict = Depends(verify_token)):
+    validation = lab_service.validate_lab_task(
+        submission.lab_id,
+        submission.task_id,
+        submission.answer
+    )
+    
+    # Update progress
+    progress = await db.lab_progress.find_one({
+        "user_id": payload['user_id'],
+        "lab_id": submission.lab_id
+    }, {"_id": 0})
+    
+    if progress:
+        if submission.task_id not in progress['completed_tasks']:
+            progress['completed_tasks'].append(submission.task_id)
+            progress['score'] += validation.get('points', 0)
+            
+            await db.lab_progress.update_one(
+                {"user_id": payload['user_id'], "lab_id": submission.lab_id},
+                {"$set": {
+                    "completed_tasks": progress['completed_tasks'],
+                    "score": progress['score']
+                }}
+            )
+    
+    return {
+        "correct": validation['correct'],
+        "feedback": validation['feedback'],
+        "points_earned": validation.get('points', 0),
+        "total_score": progress['score'] if progress else 0
+    }
+
+@api_router.post("/labs/{lab_id}/complete")
+async def complete_lab(lab_id: str, payload: dict = Depends(verify_token)):
+    await db.lab_progress.update_one(
+        {"user_id": payload['user_id'], "lab_id": lab_id},
+        {"$set": {"completed_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": "Lab completed"}
+
+@api_router.get("/labs/{lab_id}/progress")
+async def get_lab_progress(lab_id: str, payload: dict = Depends(verify_token)):
+    progress = await db.lab_progress.find_one({
+        "user_id": payload['user_id'],
+        "lab_id": lab_id
+    }, {"_id": 0})
+    
+    if not progress:
+        return {"started": False}
+    
+    return {
+        "started": True,
+        "completed_tasks": progress.get('completed_tasks', []),
+        "score": progress.get('score', 0),
+        "completed": progress.get('completed_at') is not None
+    }
 
 @api_router.post("/threats/analyze-file-behavior")
 async def analyze_file_behavior(
