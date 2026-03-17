@@ -114,6 +114,7 @@ class ChatResponse(BaseModel):
 
 class ProgressUpdate(BaseModel):
     module_id: str
+    completed: bool
 
 class GoogleOAuthRequest(BaseModel):
     token: str
